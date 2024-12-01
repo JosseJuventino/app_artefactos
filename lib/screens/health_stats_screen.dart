@@ -21,96 +21,41 @@ class _HealthStatsScreenState extends State<HealthStatsScreen> {
   Timer? _timer;
 
   // Lista para almacenar las recetas
-  List<Recipe> recipes = [];
+  List<PillBox> pillBoxes = [];
 
   @override
   void initState() {
     super.initState();
     // Obtener las recetas al inicializar el estado
-    _loadRecipes();
+    _loadPillBoxes();
   }
 
-  void _loadRecipes() {
+  void _loadPillBoxes() {
     final database = FirebaseDatabase.instance.reference();
 
-    // Escuchar la carga inicial de todas las recetas
-    database.child('recipes').once().then((event) {
+    // Escuchar todos los cambios en tiempo real
+    database.child('pillBoxes').onValue.listen((event) {
       final data = event.snapshot.value;
 
       if (data != null && data is Map) {
-        List<Recipe> loadedRecipes = [];
-        Map<dynamic, dynamic> recipesMap = data;
+        List<PillBox> loadedPillBoxes = [];
+        Map<dynamic, dynamic> pillBoxesMap = data;
 
-        recipesMap.forEach((key, value) {
-          // Asegurarse de que 'value' es un Map y no otro tipo de objeto
+        pillBoxesMap.forEach((key, value) {
           if (value is Map) {
-            final newRecipe = Recipe(
-              pillValue: value['pillValue'],
-              pillsPerHour: value['pillsPerHour'],
-              additionalMessage: value['additionalMessage'],
+            final newPillBox = PillBox(
+              id: key, // Añadir un ID único
+              pillName: value['pillName'],
+              pillCount: value['pillCount'],
+              schedule: List<String>.from(value['schedule']),
+              note: value['note'],
             );
-            loadedRecipes.add(newRecipe);
+            loadedPillBoxes.add(newPillBox);
           }
         });
 
-        // Actualizamos la lista de recetas al cargar desde la base de datos
         setState(() {
-          recipes = loadedRecipes;
-        });
-      }
-    });
-
-    // Escuchar cambios en tiempo real como ya se explicó
-    database.child('recipes').onChildAdded.listen((event) {
-      final data = event.snapshot.value;
-      if (data != null && data is Map) {
-        final newRecipe = Recipe(
-          pillValue: data['pillValue'],
-          pillsPerHour: data['pillsPerHour'],
-          additionalMessage: data['additionalMessage'],
-        );
-        setState(() {
-          recipes.add(newRecipe); // Agregar receta a la lista
-        });
-      }
-    });
-
-    // Detectar cambios en recetas existentes
-    database.child('recipes').onChildChanged.listen((event) {
-      final data = event.snapshot.value;
-      if (data != null && data is Map) {
-        final updatedRecipe = Recipe(
-          pillValue: data['pillValue'],
-          pillsPerHour: data['pillsPerHour'],
-          additionalMessage: data['additionalMessage'],
-        );
-
-        setState(() {
-          // Actualizamos la receta en la lista si ya existe
-          final index = recipes.indexWhere((recipe) =>
-              recipe.pillValue ==
-              updatedRecipe.pillValue); // Buscar por pillValue
-          if (index != -1) {
-            recipes[index] = updatedRecipe; // Actualizar receta
-          }
-        });
-      }
-    });
-
-    // Detectar eliminación de recetas
-    database.child('recipes').onChildRemoved.listen((event) {
-      final data = event.snapshot.value;
-      if (data != null && data is Map) {
-        final removedRecipe = Recipe(
-          pillValue: data['pillValue'],
-          pillsPerHour: data['pillsPerHour'],
-          additionalMessage: data['additionalMessage'],
-        );
-
-        setState(() {
-          // Eliminar receta de la lista
-          recipes.removeWhere(
-              (recipe) => recipe.pillValue == removedRecipe.pillValue);
+          pillBoxes = loadedPillBoxes;
         });
       }
     });
@@ -157,24 +102,24 @@ class _HealthStatsScreenState extends State<HealthStatsScreen> {
     });
   }
 
-  // En HealthStatsScreen, después de agregar la receta
-  void _addRecipe(
-      String pillValue, int pillsPerHour, String additionalMessage) {
-    Navigator.of(context).pop(); // Cerrar el formulario de agregar receta
+  void _addPillBox(
+      String pillName, int pillCount, List<String> schedule, String note) {
+    Navigator.of(context)
+        .pop(); // Cerrar el formulario de agregar caja de pastillas
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Receta agregada con éxito')),
+      SnackBar(content: Text('Caja de pastillas agregada con éxito')),
     );
   }
 
-  // Función para abrir el formulario de agregar receta
-  void _openAddRecipeDialog() {
+  void _openAddPillBoxDialog() {
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text('Agregar Receta',
+          title: Text('Agregar Caja de Pastillas',
               style: TextStyle(color: Color(0xFF6200EE))),
-          content: AddRecipeForm(onSubmit: _addRecipe),
+          content:
+              AddPillBoxForm(onSubmit: _addPillBox), // Cambiar a _addPillBox
         );
       },
     );
@@ -221,12 +166,14 @@ class _HealthStatsScreenState extends State<HealthStatsScreen> {
               ),
             ),
             // Mostrar las recetas que se han cargado desde Realtime Database
-            ...recipes.map((recipe) => RecipeCard(recipe: recipe)).toList(),
+            ...pillBoxes
+                .map((pillBox) => PillBoxCard(pillBox: pillBox))
+                .toList(),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _openAddRecipeDialog,
+        onPressed: _openAddPillBoxDialog,
         child: Icon(Icons.add),
         backgroundColor: Color(0xFF6200EE),
       ),

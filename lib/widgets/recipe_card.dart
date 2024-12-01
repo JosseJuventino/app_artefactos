@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../models/recipe.dart';
+import '../models/recipe.dart'; // Asegúrate de que este es el nombre correcto del modelo
 
-class RecipeCard extends StatelessWidget {
-  final Recipe recipe;
+class PillBoxCard extends StatelessWidget {
+  final PillBox pillBox;
 
-  RecipeCard({required this.recipe});
+  PillBoxCard({required this.pillBox});
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +20,7 @@ class RecipeCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Valor de la pastilla: ${recipe.pillValue}',
+              'Nombre de la pastilla: ${pillBox.pillName}',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -29,18 +29,20 @@ class RecipeCard extends StatelessWidget {
             ),
             SizedBox(height: 12),
             Text(
-              'Pastillas por hora: ${recipe.pillsPerHour}',
+              'Cantidad de pastillas: ${pillBox.pillCount}',
               style: TextStyle(
                 color: Colors.grey,
                 fontSize: 16,
               ),
             ),
             SizedBox(height: 12),
-            if (recipe.additionalMessage.isNotEmpty)
-              Text(
-                'Mensaje adicional: ${recipe.additionalMessage}',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
+            Text(
+              'Horarios: ${pillBox.schedule.join(', ')}', // Mostrar los horarios de toma
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
               ),
+            ),
           ],
         ),
       ),
