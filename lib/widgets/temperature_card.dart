@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class TemperatureCard extends StatefulWidget {
   @override
@@ -29,81 +29,48 @@ class _TemperatureCardState extends State<TemperatureCard> {
     _loadTemperatureData();
   }
 
-  // Cargar los datos de temperatura desde Firestore
-  Future<void> _loadTemperatureData() async {
-    try {
-      // Acceder a la colección weeklyStats
-      var snapshot =
-          await FirebaseFirestore.instance.collection('weeklyStats').get();
+  // Cargar los datos de temperatura desde Realtime Database
+  void _loadTemperatureData() {
+    final dbRef = FirebaseDatabase.instance.ref('weeklyStats');
 
-      // Verificamos si la colección tiene documentos
-      if (snapshot.docs.isEmpty) {
+    // Escuchar cambios en la base de datos en tiempo real
+    dbRef.onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+
+      if (data == null) {
         setState(() {
-          errorMessage = "No hay datos de la semana en 'weeklyStats'.";
+          errorMessage = "No hay datos disponibles";
           isLoading = false;
         });
-        print("No hay datos en 'weeklyStats'");
         return;
       }
 
-      // Lista para almacenar las temperaturas de cada día
       List<FlSpot> spots = [];
 
-      // Iterar sobre los días de la semana en el orden correcto
+      // Iterar sobre los días de la semana y obtener las temperaturas
       for (String day in daysOfWeek) {
-        bool dayFound = false;
+        var dayData = data[day];
+        if (dayData != null) {
+          // Obtener la temperatura del día (accediendo a 'temperatures')
+          var temperature = dayData['temperatures'];
 
-        // Buscar el documento correspondiente al día
-        for (var doc in snapshot.docs) {
-          if (doc.id == day) {
-            // Obtener las lecturas de temperatura para ese día desde el arreglo 'temperatures'
-            var temperaturesList = doc['temperatures'] as List<dynamic>;
+          if (temperature != null) {
+            // Convertir la temperatura a double
+            double temp = double.tryParse(temperature.toString()) ?? 0.0;
 
-            if (temperaturesList.isEmpty) {
-              print('No hay datos de temperatura para $day');
-            } else {
-              // Obtener la última lectura de temperatura para ese día
-              var lastTemperature = temperaturesList.last;
-              double temperature = lastTemperature['value'].toDouble();
-
-              print('Última temperatura para $day: $temperature °C');
-
-              // Agregar el dato al gráfico
-              int dayIndex = _getDayIndex(
-                  day); // Convertir el nombre del día en un índice (0-6)
-              spots.add(FlSpot(dayIndex.toDouble(), temperature));
-            }
-
-            dayFound = true;
-            break; // Si encontramos el documento, salimos del ciclo
+            // Mapear el día a un índice para el gráfico
+            int dayIndex = _getDayIndex(
+                day); // Convertir el nombre del día en un índice (0-6)
+            spots.add(FlSpot(dayIndex.toDouble(), temp));
           }
         }
-
-        // Si no encontramos el documento para ese día, lo ignoramos
-        if (!dayFound) {
-          print('No se encontró el documento para $day');
-        }
       }
 
-      // Si encontramos datos, actualizamos el estado
       setState(() {
         temperatureData = spots;
-        isLoading = false; // Los datos se cargaron
-      });
-
-      if (temperatureData.isEmpty) {
-        setState(() {
-          errorMessage = "No se encontraron lecturas de temperatura.";
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        errorMessage = "Error al cargar los datos: $e";
         isLoading = false;
       });
-      print("Error al cargar los datos: $e");
-    }
+    });
   }
 
   // Función para mapear el nombre del día al índice (0-6)
@@ -137,16 +104,15 @@ class _TemperatureCardState extends State<TemperatureCard> {
               height: 250,
               child: isLoading
                   ? Center(
-                      child:
-                          CircularProgressIndicator()) // Mostrar indicador de carga
+                      child: CircularProgressIndicator()) // Indicador de carga
                   : temperatureData.isEmpty
                       ? Center(
-                          child: Text(
-                              errorMessage)) // Si no hay datos, mostrar el error
+                          child: Text(errorMessage)) // Error si no hay datos
                       : LineChart(
                           LineChartData(
-                            minY: 35,
-                            maxY: 40,
+                            minY:
+                                20, // Establece los valores min y max para la temperatura
+                            maxY: 45,
                             gridData: FlGridData(
                               show: true,
                               getDrawingHorizontalLine: (value) {
@@ -167,7 +133,7 @@ class _TemperatureCardState extends State<TemperatureCard> {
                                 sideTitles: SideTitles(
                                   showTitles: true,
                                   reservedSize: 32,
-                                  interval: 0.5,
+                                  interval: 5,
                                   getTitlesWidget: (value, meta) {
                                     return Text(
                                       value.toInt().toString(),
