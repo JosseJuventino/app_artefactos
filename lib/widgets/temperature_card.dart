@@ -11,6 +11,8 @@ class _TemperatureCardState extends State<TemperatureCard> {
   List<FlSpot> temperatureData = [];
   bool isLoading = true;
   String errorMessage = '';
+  double latestTemperature =
+      0.0; // Variable para almacenar la última temperatura
 
   // Lista de días de la semana
   final List<String> daysOfWeek = [
@@ -27,9 +29,10 @@ class _TemperatureCardState extends State<TemperatureCard> {
   void initState() {
     super.initState();
     _loadTemperatureData();
+    _loadLatestTemperature(); // Cargar la última temperatura
   }
 
-  // Cargar los datos de temperatura desde Realtime Database
+  // Cargar los datos de temperatura desde Realtime Database (para el gráfico)
   void _loadTemperatureData() {
     final dbRef = FirebaseDatabase.instance.ref('weeklyStats');
 
@@ -73,6 +76,32 @@ class _TemperatureCardState extends State<TemperatureCard> {
     });
   }
 
+  // Cargar la última temperatura desde 'latestData'
+  void _loadLatestTemperature() {
+    final dbRef = FirebaseDatabase.instance.ref('latestData');
+
+    // Escuchar cambios en la base de datos en tiempo real
+    dbRef.onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+
+      if (data == null) {
+        setState(() {
+          errorMessage = "No hay datos disponibles para la última temperatura";
+        });
+        return;
+      }
+
+      // Obtener la última temperatura de 'latestData'
+      var temperature = data['temperature'];
+
+      if (temperature != null) {
+        setState(() {
+          latestTemperature = double.tryParse(temperature.toString()) ?? 0.0;
+        });
+      }
+    });
+  }
+
   // Función para mapear el nombre del día al índice (0-6)
   int _getDayIndex(String day) {
     return daysOfWeek.indexOf(day);
@@ -92,7 +121,7 @@ class _TemperatureCardState extends State<TemperatureCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Temperatura del Día",
+              "Temperatura Semanal",
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -190,7 +219,7 @@ class _TemperatureCardState extends State<TemperatureCard> {
             ),
             SizedBox(height: 12),
             Text(
-              "Última Temperatura: ${temperatureData.isNotEmpty ? temperatureData.last.y.toStringAsFixed(1) : 'N/A'} °C",
+              "Última Temperatura: ${latestTemperature.toStringAsFixed(1)} °C", // Mostrar la última temperatura
               style: TextStyle(color: Colors.grey, fontSize: 14),
             ),
           ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class HeartRateCard extends StatefulWidget {
   @override
@@ -11,6 +11,7 @@ class _HeartRateCardState extends State<HeartRateCard> {
   List<FlSpot> heartRateData = [];
   bool isLoading = true;
   String errorMessage = '';
+  double latestHeartRate = 0.0; // Variable para almacenar el último pulso
 
   // Lista de días de la semana
   final List<String> daysOfWeek = [
@@ -27,85 +28,79 @@ class _HeartRateCardState extends State<HeartRateCard> {
   void initState() {
     super.initState();
 
-    // Luego cargamos los datos de Firestore
+    // Cargar los datos de Firebase Realtime Database
     _loadHeartRateData();
+    _loadLatestHeartRate(); // Cargar el último pulso
   }
 
-  // Cargar los datos de pulso cardíaco desde Firestore
-  Future<void> _loadHeartRateData() async {
-    try {
-      // Acceder a la colección weeklyStats
-      var snapshot =
-          await FirebaseFirestore.instance.collection('weeklyStats').get();
+  // Cargar los datos de pulso cardíaco desde Firebase Realtime Database (para el gráfico)
+  void _loadHeartRateData() {
+    final dbRef = FirebaseDatabase.instance.ref('weeklyStats');
 
-      // Verificamos si la colección tiene documentos
-      if (snapshot.docs.isEmpty) {
+    // Escuchar cambios en la base de datos en tiempo real
+    dbRef.onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+
+      if (data == null) {
         setState(() {
-          errorMessage = "No hay datos de la semana en 'weeklyStats'.";
+          errorMessage = "No hay datos disponibles";
           isLoading = false;
         });
-        print("No hay datos en 'weeklyStats'");
         return;
       }
 
-      // Lista para almacenar las frecuencias cardíacas de cada día
       List<FlSpot> spots = [];
 
-      // Iterar sobre los días de la semana en el orden correcto
+      // Iterar sobre los días de la semana y obtener las frecuencias cardíacas
       for (String day in daysOfWeek) {
-        bool dayFound = false;
+        var dayData = data[day];
+        if (dayData != null) {
+          // Obtener el valor de "heart" del día
+          var heartRate = dayData['heart'];
 
-        // Buscar el documento correspondiente al día
-        for (var doc in snapshot.docs) {
-          if (doc.id == day) {
-            // Obtener las lecturas de frecuencia cardíaca para ese día desde el arreglo 'heartRate'
-            var heartRateList = doc['heartRate'] as List<dynamic>;
+          if (heartRate != null) {
+            // Convertir el valor de heart a double
+            double heart = double.tryParse(heartRate.toString()) ?? 0.0;
 
-            if (heartRateList.isEmpty) {
-              print('No hay datos de pulso para $day');
-            } else {
-              // Obtener la última lectura de pulso para ese día
-              var lastHeartRate = heartRateList.last;
-              double heartRate = lastHeartRate['value'].toDouble();
-
-              print('Último pulso para $day: $heartRate BPM');
-
-              // Agregar el dato al gráfico
-              int dayIndex = _getDayIndex(
-                  day); // Convertir el nombre del día en un índice (0-6)
-              spots.add(FlSpot(dayIndex.toDouble(), heartRate));
-            }
-
-            dayFound = true;
-            break; // Si encontramos el documento, salimos del ciclo
+            // Mapear el día a un índice para el gráfico
+            int dayIndex = _getDayIndex(
+                day); // Convertir el nombre del día en un índice (0-6)
+            spots.add(FlSpot(dayIndex.toDouble(), heart));
           }
         }
-
-        // Si no encontramos el documento para ese día, lo ignoramos
-        if (!dayFound) {
-          print('No se encontró el documento para $day');
-        }
       }
 
-      // Si encontramos datos, actualizamos el estado
       setState(() {
         heartRateData = spots;
-        isLoading = false; // Los datos se cargaron
-      });
-
-      if (heartRateData.isEmpty) {
-        setState(() {
-          errorMessage = "No se encontraron lecturas de pulso.";
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        errorMessage = "Error al cargar los datos: $e";
         isLoading = false;
       });
-      print("Error al cargar los datos de pulso: $e");
-    }
+    });
+  }
+
+  // Cargar el último valor de pulso desde 'latestData'
+  void _loadLatestHeartRate() {
+    final dbRef = FirebaseDatabase.instance.ref('latestData');
+
+    // Escuchar cambios en la base de datos en tiempo real
+    dbRef.onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+
+      if (data == null) {
+        setState(() {
+          errorMessage = "No hay datos disponibles para el último pulso";
+        });
+        return;
+      }
+
+      // Obtener el último valor de pulso de 'latestData'
+      var heartRate = data['heart'];
+
+      if (heartRate != null) {
+        setState(() {
+          latestHeartRate = double.tryParse(heartRate.toString()) ?? 0.0;
+        });
+      }
+    });
   }
 
   // Función para mapear el nombre del día al índice (0-6)
@@ -127,7 +122,7 @@ class _HeartRateCardState extends State<HeartRateCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Pulso Cardiaco del Día",
+              "Pulso cardíaco semanal", // Título del card
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -139,12 +134,10 @@ class _HeartRateCardState extends State<HeartRateCard> {
               height: 250,
               child: isLoading
                   ? Center(
-                      child:
-                          CircularProgressIndicator()) // Mostrar indicador de carga
+                      child: CircularProgressIndicator()) // Indicador de carga
                   : heartRateData.isEmpty
                       ? Center(
-                          child: Text(
-                              errorMessage)) // Si no hay datos, mostrar el error
+                          child: Text(errorMessage)) // Error si no hay datos
                       : LineChart(
                           LineChartData(
                             minY: 60,
@@ -226,7 +219,7 @@ class _HeartRateCardState extends State<HeartRateCard> {
             ),
             SizedBox(height: 12),
             Text(
-              "Último Pulso: ${heartRateData.isNotEmpty ? heartRateData.last.y.toStringAsFixed(1) : 'N/A'} BPM",
+              "Último Pulso: ${latestHeartRate.toStringAsFixed(1)} BPM", // Mostrar el último pulso
               style: TextStyle(color: Colors.grey, fontSize: 14),
             ),
           ],
