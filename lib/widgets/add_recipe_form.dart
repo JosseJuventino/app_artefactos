@@ -41,6 +41,8 @@ class _AddPillBoxFormState extends State<AddPillBoxForm> {
         'timestamp': ServerValue.timestamp,
       });
 
+      await database.child('totalPills/').set(pillCount);
+
       // Llamar a la función onSubmit para pasar los datos a un widget superior, si es necesario
       widget.onSubmit(pillName, pillCount, _schedule, note);
 
